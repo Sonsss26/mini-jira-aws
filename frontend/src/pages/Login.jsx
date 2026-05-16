@@ -1,20 +1,23 @@
-import { useNavigate } from "react-router-dom";
+import { useAuth } from "react-oidc-context";
 
 function Login() {
-  const navigate = useNavigate();
+  const auth = useAuth();
 
-  const handleDemoLogin = (role) => {
-    localStorage.setItem(
-      "user",
-      JSON.stringify({
-        name: role === "manager" ? "Sons" : "Sonss",
-        role,
-        teamId: role === "manager" ? null : "frontend",
-      })
+  if (auth.isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Loading...
+      </div>
     );
+  }
 
-    navigate("/dashboard");
-  };
+  if (auth.error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-red-600">
+        Error: {auth.error.message}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
@@ -24,24 +27,15 @@ function Login() {
         </h1>
 
         <p className="text-gray-500 mb-8">
-          Demo login for manager and employee views.
+          Sign in using AWS Cognito.
         </p>
 
-        <div className="space-y-3">
-          <button
-            onClick={() => handleDemoLogin("manager")}
-            className="w-full bg-blue-600 text-white py-3 rounded-xl font-medium hover:bg-blue-700"
-          >
-            Login as Manager Sons
-          </button>
-
-          <button
-            onClick={() => handleDemoLogin("employee")}
-            className="w-full bg-gray-900 text-white py-3 rounded-xl font-medium hover:bg-black"
-          >
-            Login as Employee Sonss
-          </button>
-        </div>
+        <button
+          onClick={() => auth.signinRedirect()}
+          className="w-full bg-blue-600 text-white py-3 rounded-xl font-medium hover:bg-blue-700"
+        >
+          Sign in with Cognito
+        </button>
       </div>
     </div>
   );

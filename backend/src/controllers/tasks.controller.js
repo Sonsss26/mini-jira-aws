@@ -8,6 +8,7 @@ const {
 } = require("@aws-sdk/lib-dynamodb");
 
 const { dynamoDB } = require("../config/aws");
+const { uploadFileToS3, getImageUrl } = require("../services/s3.service");
 
 const TABLE_NAME = process.env.TASKS_TABLE;
 
@@ -37,7 +38,14 @@ const getTasks = async (req, res) => {
       );
     }
 
-    res.json(result.Items || []);
+    const tasksWithImages = await Promise.all(
+      (result.Items || []).map(async (task) => ({
+        ...task,
+        imageUrl: await getImageUrl(task.imageKey),
+      }))
+    );
+
+    res.json(tasksWithImages);
   } catch (error) {
     console.error("Get tasks error:", error);
     res.status(500).json({ message: "Failed to fetch tasks" });
@@ -46,6 +54,12 @@ const getTasks = async (req, res) => {
 
 const createTask = async (req, res) => {
   try {
+    let imageKey = null;
+
+    if (req.file) {
+      imageKey = await uploadFileToS3(req.file);
+    }
+
     const {
       title,
       description,
@@ -65,6 +79,7 @@ const createTask = async (req, res) => {
       teamId,
       assigneeId,
       assigneeName,
+      imageKey,
       status: "To Do",
       createdAt: new Date().toISOString(),
     };

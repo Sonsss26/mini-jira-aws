@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const projectsRoutes = require("./routes/projects.routes");
 const tasksRoutes = require("./routes/tasks.routes");
+const commentsRoutes = require("./routes/comments.routes");
 const app = express();
 
 app.use(cors());
@@ -13,7 +14,10 @@ app.get("/", (req, res) => {
   });
 });
 
-app.use("/api/tasks", tasksRoutes);
-app.use("/api/projects", projectsRoutes);
+const authenticate = require("./middleware/auth");
+
+app.use("/api/tasks", authenticate, tasksRoutes);
+app.use("/api/projects", authenticate, projectsRoutes);
+app.use("/api/comments", authenticate, commentsRoutes);
 
 module.exports = app;
