@@ -2,7 +2,7 @@ const { CognitoJwtVerifier } = require("aws-jwt-verify");
 
 const verifier = CognitoJwtVerifier.create({
   userPoolId: process.env.COGNITO_USER_POOL_ID,
-  tokenUse: "access",
+  tokenUse: "id",
   clientId: process.env.COGNITO_CLIENT_ID,
 });
 
@@ -11,17 +11,29 @@ const authenticate = async (req, res, next) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "Missing token" });
+      return res.status(401).json({
+        message: "Missing token",
+      });
     }
 
     const token = authHeader.split(" ")[1];
+
     const payload = await verifier.verify(token);
 
-    req.user = payload;
+    req.user = {
+      sub: payload.sub,
+      email: payload.email,
+      role: payload["custom:role"],
+      teamId: payload["custom:teamId"],
+    };
+
     next();
   } catch (error) {
     console.error("Auth error:", error);
-    res.status(401).json({ message: "Invalid or expired token" });
+
+    return res.status(401).json({
+      message: "Invalid or expired token",
+    });
   }
 };
 

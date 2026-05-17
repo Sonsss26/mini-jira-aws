@@ -14,8 +14,8 @@ const TABLE_NAME = process.env.TASKS_TABLE;
 
 const getTasks = async (req, res) => {
   try {
-    const role = req.query.role;
-    const teamId = req.query.teamId;
+    const role = req.user.role;
+    const teamId = req.user.teamId;
 
     let result;
 
@@ -23,7 +23,7 @@ const getTasks = async (req, res) => {
       result = await dynamoDB.send(
         new ScanCommand({
           TableName: TABLE_NAME,
-        })
+        }),
       );
     } else {
       result = await dynamoDB.send(
@@ -34,7 +34,7 @@ const getTasks = async (req, res) => {
           ExpressionAttributeValues: {
             ":teamId": teamId,
           },
-        })
+        }),
       );
     }
 
@@ -42,16 +42,18 @@ const getTasks = async (req, res) => {
       (result.Items || []).map(async (task) => ({
         ...task,
         imageUrl: await getImageUrl(task.imageKey),
-      }))
+      })),
     );
 
     res.json(tasksWithImages);
   } catch (error) {
     console.error("Get tasks error:", error);
-    res.status(500).json({ message: "Failed to fetch tasks" });
+
+    res.status(500).json({
+      message: "Failed to fetch tasks",
+    });
   }
 };
-
 const createTask = async (req, res) => {
   try {
     let imageKey = null;
@@ -88,7 +90,7 @@ const createTask = async (req, res) => {
       new PutCommand({
         TableName: TABLE_NAME,
         Item: newTask,
-      })
+      }),
     );
 
     res.status(201).json(newTask);
@@ -116,7 +118,7 @@ const updateTaskStatus = async (req, res) => {
           ":updatedAt": new Date().toISOString(),
         },
         ReturnValues: "ALL_NEW",
-      })
+      }),
     );
 
     res.json(result.Attributes);
@@ -134,7 +136,7 @@ const deleteTask = async (req, res) => {
       new DeleteCommand({
         TableName: TABLE_NAME,
         Key: { id },
-      })
+      }),
     );
 
     res.json({ message: "Task deleted successfully" });

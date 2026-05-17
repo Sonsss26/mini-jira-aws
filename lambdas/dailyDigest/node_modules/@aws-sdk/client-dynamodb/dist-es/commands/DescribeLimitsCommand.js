@@ -1,0 +1,16 @@
+import { Command as $Command } from "@smithy/core/client";
+import { getEndpointPlugin } from "@smithy/core/endpoints";
+import { commonParams } from "../endpoint/EndpointParameters";
+import { DescribeLimits$ } from "../schemas/schemas_0";
+export { $Command };
+export class DescribeLimitsCommand extends $Command
+    .classBuilder()
+    .ep(commonParams)
+    .m(function (Command, cs, config, o) {
+    return [getEndpointPlugin(config, Command.getEndpointParameterInstructions())];
+})
+    .s("DynamoDB_20120810", "DescribeLimits", {})
+    .n("DynamoDBClient", "DescribeLimitsCommand")
+    .sc(DescribeLimits$)
+    .build() {
+}

@@ -9,7 +9,7 @@ const cognitoAuthConfig = {
   client_id: import.meta.env.VITE_COGNITO_CLIENT_ID,
   redirect_uri: import.meta.env.VITE_COGNITO_REDIRECT_URI,
   response_type: "code",
-  scope: "openid email",
+  scope: "openid email profile",
 };
 
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -17,5 +17,5 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <AuthProvider {...cognitoAuthConfig}>
       <App />
     </AuthProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

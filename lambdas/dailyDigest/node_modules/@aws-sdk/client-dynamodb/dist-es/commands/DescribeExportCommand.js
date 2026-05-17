@@ -1,0 +1,19 @@
+import { Command as $Command } from "@smithy/core/client";
+import { getEndpointPlugin } from "@smithy/core/endpoints";
+import { commonParams } from "../endpoint/EndpointParameters";
+import { DescribeExport$ } from "../schemas/schemas_0";
+export { $Command };
+export class DescribeExportCommand extends $Command
+    .classBuilder()
+    .ep({
+    ...commonParams,
+    ResourceArn: { type: "contextParams", name: "ExportArn" },
+})
+    .m(function (Command, cs, config, o) {
+    return [getEndpointPlugin(config, Command.getEndpointParameterInstructions())];
+})
+    .s("DynamoDB_20120810", "DescribeExport", {})
+    .n("DynamoDBClient", "DescribeExportCommand")
+    .sc(DescribeExport$)
+    .build() {
+}

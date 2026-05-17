@@ -11,7 +11,6 @@ const dynamoDB = DynamoDBDocumentClient.from(dynamoClient);
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
 });
-
 module.exports = {
   dynamoDB,
   s3Client,
