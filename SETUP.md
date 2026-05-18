@@ -118,3 +118,48 @@ Auth: `Authorization: Bearer <cognito_id_token>`
 | **employee** | View team tasks, update status, comment |
 
 Authorization uses JWT claims only (`req.user.role`, `req.user.teamId`) — never trust client-sent role/team in request body for access control.
+
+## SNS + SQS + Lambda Integration
+
+The project includes an event-driven notification flow for task assignment.
+
+### Flow
+
+Manager creates a task from the frontend.
+
+Backend publishes a message to Amazon SNS.
+
+SNS sends the notification to:
+- Manager email subscription
+- SQS queue
+
+SQS triggers a Lambda worker.
+
+Lambda processes the message and writes logs to CloudWatch.
+
+### AWS Resources
+
+SNS Topic:
+mini-jira-task-assigned
+
+SQS Queue:
+mini-jira-assignment-queue
+
+Lambda Function:
+mini-jira-assignment-worker
+
+CloudWatch Log Group:
+/aws/lambda/mini-jira-assignment-worker
+
+### Test Evidence
+
+The integration was tested successfully:
+
+- SNS email notification reached the manager email.
+- SNS message was delivered to SQS.
+- SQS triggered Lambda.
+- CloudWatch Logs showed:
+  - SQS event received
+  - SNS Topic ARN
+  - SNS Subject
+  - SNS Message
