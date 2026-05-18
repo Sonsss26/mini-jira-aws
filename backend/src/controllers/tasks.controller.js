@@ -9,6 +9,7 @@ const {
 
 const { dynamoDB } = require("../config/aws");
 const { uploadFileToS3, getImageUrl } = require("../services/s3.service");
+const { sendMetric, sendTaskMetricByTeam } = require("../utils/cloudwatch");
 
 const TABLE_NAME = process.env.TASKS_TABLE;
 
@@ -91,6 +92,9 @@ const createTask = async (req, res) => {
       })
     );
 
+    await sendMetric("TasksCreated", 1);
+    await sendTaskMetricByTeam("TasksCreatedByTeam", teamId, 1);
+
     res.status(201).json(newTask);
   } catch (error) {
     console.error("Create task error:", error);
@@ -102,6 +106,18 @@ const updateTaskStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+
+    const currentTask = await dynamoDB.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        KeyConditionExpression: "id = :id",
+        ExpressionAttributeValues: { ":id": id },
+      })
+    );
+
+    const oldStatus = currentTask.Items?.[0]?.status;
+    const createdAt = currentTask.Items?.[0]?.createdAt;
+    const teamId = currentTask.Items?.[0]?.teamId;
 
     const result = await dynamoDB.send(
       new UpdateCommand({
@@ -118,6 +134,20 @@ const updateTaskStatus = async (req, res) => {
         ReturnValues: "ALL_NEW",
       })
     );
+
+    if (status === "Done" && oldStatus !== "Done") {
+      await sendMetric("TasksClosed", 1);
+      if (teamId) {
+        await sendTaskMetricByTeam("TasksClosedByTeam", teamId, 1);
+      }
+
+      if (createdAt) {
+        const createdTime = new Date(createdAt);
+        const completedTime = new Date();
+        const hoursToClose = (completedTime - createdTime) / (1000 * 60 * 60);
+        await sendMetric("TimeToClose", hoursToClose, "None");
+      }
+    }
 
     res.json(result.Attributes);
   } catch (error) {
