@@ -1,0 +1,18 @@
+{
+  "name": "imageresize",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1048.0",
+    "@aws-sdk/client-s3": "^3.1048.0",
+    "@aws-sdk/lib-dynamodb": "^3.1048.0",
+    "sharp": "^0.34.5"
+  }
+}
