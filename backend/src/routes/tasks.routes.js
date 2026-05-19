@@ -1,8 +1,6 @@
 const express = require("express");
 const multer = require("multer");
 
-const authenticate = require("../middleware/auth");
-
 const {
   getTasks,
   createTask,
@@ -15,12 +13,9 @@ const router = express.Router();
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-router.get("/", authenticate, getTasks);
-
-router.post("/", authenticate, upload.single("image"), createTask);
-
-router.patch("/:id/status", authenticate, updateTaskStatus);
-
-router.delete("/:id", authenticate, deleteTask);
+router.get("/", getTasks);
+router.post("/", upload.single("image"), createTask);
+router.patch("/:id/status", updateTaskStatus);
+router.delete("/:id", deleteTask);
 
 module.exports = router;

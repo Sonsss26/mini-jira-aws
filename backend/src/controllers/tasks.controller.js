@@ -6,18 +6,17 @@ const {
   UpdateCommand,
   DeleteCommand,
 } = require("@aws-sdk/lib-dynamodb");
-const { PublishCommand } = require("@aws-sdk/client-sns");
 
-const { dynamoDB, snsClient } = require("../config/aws");
+const { dynamoDB } = require("../config/aws");
 const { uploadFileToS3, getImageUrl } = require("../services/s3.service");
+const { sendMetric, sendTaskMetricByTeam } = require("../utils/cloudwatch");
 
 const TABLE_NAME = process.env.TASKS_TABLE;
-const SNS_TASK_ASSIGNED_TOPIC_ARN = process.env.SNS_TASK_ASSIGNED_TOPIC_ARN;
 
 const getTasks = async (req, res) => {
   try {
-    const role = req.user.role;
-    const teamId = req.user.teamId;
+    const role = req.query.role;
+    const teamId = req.query.teamId;
 
     let result;
 
@@ -25,7 +24,7 @@ const getTasks = async (req, res) => {
       result = await dynamoDB.send(
         new ScanCommand({
           TableName: TABLE_NAME,
-        }),
+        })
       );
     } else {
       result = await dynamoDB.send(
@@ -36,7 +35,7 @@ const getTasks = async (req, res) => {
           ExpressionAttributeValues: {
             ":teamId": teamId,
           },
-        }),
+        })
       );
     }
 
@@ -44,16 +43,13 @@ const getTasks = async (req, res) => {
       (result.Items || []).map(async (task) => ({
         ...task,
         imageUrl: await getImageUrl(task.imageKey),
-      })),
+      }))
     );
 
     res.json(tasksWithImages);
   } catch (error) {
     console.error("Get tasks error:", error);
-
-    res.status(500).json({
-      message: "Failed to fetch tasks",
-    });
+    res.status(500).json({ message: "Failed to fetch tasks" });
   }
 };
 
@@ -93,31 +89,11 @@ const createTask = async (req, res) => {
       new PutCommand({
         TableName: TABLE_NAME,
         Item: newTask,
-      }),
+      })
     );
 
-    // Publish SNS event when a manager assigns a task
-    if (SNS_TASK_ASSIGNED_TOPIC_ARN) {
-      await snsClient.send(
-        new PublishCommand({
-          TopicArn: SNS_TASK_ASSIGNED_TOPIC_ARN,
-          Subject: "New Task Assigned",
-          Message: JSON.stringify({
-            eventType: "TASK_ASSIGNED",
-            taskId: newTask.id,
-            title: newTask.title,
-            description: newTask.description,
-            priority: newTask.priority,
-            deadline: newTask.deadline,
-            teamId: newTask.teamId,
-            assigneeId: newTask.assigneeId,
-            assigneeName: newTask.assigneeName,
-            status: newTask.status,
-            createdAt: newTask.createdAt,
-          }),
-        }),
-      );
-    }
+    await sendMetric("TasksCreated", 1);
+    await sendTaskMetricByTeam("TasksCreatedByTeam", teamId, 1);
 
     res.status(201).json(newTask);
   } catch (error) {
@@ -130,6 +106,18 @@ const updateTaskStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+
+    const currentTask = await dynamoDB.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        KeyConditionExpression: "id = :id",
+        ExpressionAttributeValues: { ":id": id },
+      })
+    );
+
+    const oldStatus = currentTask.Items?.[0]?.status;
+    const createdAt = currentTask.Items?.[0]?.createdAt;
+    const teamId = currentTask.Items?.[0]?.teamId;
 
     const result = await dynamoDB.send(
       new UpdateCommand({
@@ -144,8 +132,22 @@ const updateTaskStatus = async (req, res) => {
           ":updatedAt": new Date().toISOString(),
         },
         ReturnValues: "ALL_NEW",
-      }),
+      })
     );
+
+    if (status === "Done" && oldStatus !== "Done") {
+      await sendMetric("TasksClosed", 1);
+      if (teamId) {
+        await sendTaskMetricByTeam("TasksClosedByTeam", teamId, 1);
+      }
+
+      if (createdAt) {
+        const createdTime = new Date(createdAt);
+        const completedTime = new Date();
+        const hoursToClose = (completedTime - createdTime) / (1000 * 60 * 60);
+        await sendMetric("TimeToClose", hoursToClose, "None");
+      }
+    }
 
     res.json(result.Attributes);
   } catch (error) {
@@ -162,7 +164,7 @@ const deleteTask = async (req, res) => {
       new DeleteCommand({
         TableName: TABLE_NAME,
         Key: { id },
-      }),
+      })
     );
 
     res.json({ message: "Task deleted successfully" });
