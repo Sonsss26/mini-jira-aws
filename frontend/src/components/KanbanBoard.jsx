@@ -10,7 +10,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { toast } from "sonner";
+import toast from "react-hot-toast";
 import { KanbanColumn } from "./KanbanColumn";
 import { TaskDragPreview } from "./SortableTask";
 
@@ -91,8 +91,6 @@ export default function KanbanBoard({ tasks, onUpdateStatus, userRole, onDeleteT
             tasks={getTasksByStatus(column)}
             userRole={userRole}
             onDeleteTask={onDeleteTask}
-            onUpdateStatus={onUpdateStatus}
-            columns={COLUMNS}
             comments={comments}
             commentInputs={commentInputs}
             setCommentInputs={setCommentInputs}

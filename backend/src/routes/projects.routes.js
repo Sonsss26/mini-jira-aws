@@ -1,5 +1,5 @@
 const express = require("express");
-
+const requireManager = require("../middleware/requireManager");
 const {
   getProjects,
   createProject,
@@ -10,8 +10,8 @@ const {
 const router = express.Router();
 
 router.get("/", getProjects);
-router.post("/", createProject);
-router.put("/:id", updateProject);
-router.delete("/:id", deleteProject);
+router.post("/", requireManager, createProject);
+router.put("/:id", requireManager, updateProject);
+router.delete("/:id", requireManager, deleteProject);
 
 module.exports = router;

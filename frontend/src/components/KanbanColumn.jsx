@@ -7,8 +7,6 @@ export function KanbanColumn({
   tasks,
   userRole,
   onDeleteTask,
-  onUpdateStatus,
-  columns,
   comments,
   commentInputs,
   setCommentInputs,
@@ -39,8 +37,6 @@ export function KanbanColumn({
               task={task}
               userRole={userRole}
               onDeleteTask={onDeleteTask}
-              onUpdateStatus={onUpdateStatus}
-              columns={columns}
               comments={comments}
               commentInputs={commentInputs}
               setCommentInputs={setCommentInputs}

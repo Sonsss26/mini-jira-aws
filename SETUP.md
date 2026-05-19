@@ -17,7 +17,12 @@ npm run dev
 - Frontend: http://localhost:5173  
 - Backend: http://localhost:5000  
 
-Copy `backend/.env.example` → `backend/.env` and fill in your AWS credentials.
+Copy env templates and fill in your values:
+
+- `backend/.env.example` → `backend/.env`
+- `frontend/.env.example` → `frontend/.env` **(required for login — not in git)**
+
+Restart both dev servers after creating or changing `.env` files.
 
 ---
 

@@ -1,113 +1,126 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "react-oidc-context";
+import toast from "react-hot-toast";
 import Navbar from "../components/Navbar";
+import { api, authHeaders } from "../lib/api";
 
 function Projects() {
-  const [projects, setProjects] = useState([]);
-  const [form, setForm] = useState({
-    name: "",
-    description: "",
-  });
+  const auth = useAuth();
+  const navigate = useNavigate();
 
-  const fetchProjects = async () => {
-    const response = await axios.get("http://localhost:5000/api/projects");
-    setProjects(response.data);
-  };
+  const [projects, setProjects] = useState([]);
+  const [form, setForm] = useState({ name: "", description: "" });
+  const [loading, setLoading] = useState(true);
+
+  const profile = auth.user?.profile;
+  const isManager = profile?.["custom:role"] === "manager";
+  const headers = () => authHeaders(auth.user?.id_token);
 
   useEffect(() => {
+    if (!auth.isAuthenticated) {
+      navigate("/login");
+      return;
+    }
     fetchProjects();
-  }, []);
+  }, [auth.isAuthenticated]);
+
+  const fetchProjects = async () => {
+    try {
+      setLoading(true);
+      const { data } = await api.get("/api/projects", headers());
+      setProjects(data);
+    } catch {
+      toast.error("Failed to load projects");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCreateProject = async (e) => {
     e.preventDefault();
-
-    await axios.post("http://localhost:5000/api/projects", form);
-
-    setForm({
-      name: "",
-      description: "",
-    });
-
-    fetchProjects();
+    try {
+      await api.post("/api/projects", form, headers());
+      toast.success("Project created");
+      setForm({ name: "", description: "" });
+      fetchProjects();
+    } catch {
+      toast.error("Failed to create project");
+    }
   };
 
   const handleDeleteProject = async (projectId) => {
-    const confirmed = window.confirm("Delete this project?");
-    if (!confirmed) return;
-
-    await axios.delete(`http://localhost:5000/api/projects/${projectId}`);
-    fetchProjects();
+    if (!window.confirm("Delete this project?")) return;
+    try {
+      await api.delete(`/api/projects/${projectId}`, headers());
+      toast.success("Project deleted");
+      fetchProjects();
+    } catch {
+      toast.error("Failed to delete project");
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-50">
       <Navbar />
 
-      <main className="p-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">
-          Projects
-        </h1>
+      <main className="p-6 max-w-screen-lg mx-auto">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Projects</h1>
 
-        <form
-          onSubmit={handleCreateProject}
-          className="bg-white rounded-xl shadow p-6 mb-8 grid grid-cols-1 md:grid-cols-3 gap-4"
-        >
-          <input
-            className="border rounded-lg px-3 py-2"
-            placeholder="Project name"
-            value={form.name}
-            onChange={(e) =>
-              setForm({ ...form, name: e.target.value })
-            }
-            required
-          />
-
-          <input
-            className="border rounded-lg px-3 py-2"
-            placeholder="Project description"
-            value={form.description}
-            onChange={(e) =>
-              setForm({ ...form, description: e.target.value })
-            }
-            required
-          />
-
-          <button
-            type="submit"
-            className="bg-blue-600 text-white rounded-lg px-4 py-2"
+        {isManager && (
+          <form
+            onSubmit={handleCreateProject}
+            className="bg-white rounded-xl border border-gray-200 p-5 mb-6 flex gap-3 flex-wrap"
           >
-            Create Project
-          </button>
-        </form>
+            <input
+              className="border rounded-lg px-3 py-2 text-sm flex-1 min-w-[180px]"
+              placeholder="Project name"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              required
+            />
+            <input
+              className="border rounded-lg px-3 py-2 text-sm flex-1 min-w-[180px]"
+              placeholder="Description"
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              required
+            />
+            <button
+              type="submit"
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
+            >
+              Create
+            </button>
+          </form>
+        )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {projects.map((project) => (
-            <div key={project.id} className="bg-white rounded-xl shadow p-5">
-              <h2 className="text-lg font-semibold text-gray-900">
-                {project.name}
-              </h2>
-
-              <p className="text-sm text-gray-500 mt-2">
-                {project.description}
-              </p>
-
-              <button
-                onClick={() => handleDeleteProject(project.id)}
-                className="mt-4 text-xs bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded"
-              >
-                Delete Project
-              </button>
-            </div>
-          ))}
-
-          {projects.length === 0 && (
-            <div className="text-gray-400 bg-white rounded-xl shadow p-6">
-              No projects yet
-            </div>
-          )}
-        </div>
+        {loading ? (
+          <p className="text-gray-400 text-center py-12">Loading...</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {projects.map((project) => (
+              <div key={project.id} className="bg-white rounded-xl border border-gray-200 p-5">
+                <h2 className="font-semibold text-gray-900">{project.name}</h2>
+                <p className="text-sm text-gray-500 mt-1">{project.description}</p>
+                {isManager && (
+                  <button
+                    onClick={() => handleDeleteProject(project.id)}
+                    className="mt-4 text-xs text-red-600 hover:bg-red-50 px-2 py-1 rounded"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            ))}
+            {projects.length === 0 && (
+              <p className="text-gray-400 col-span-3 text-center py-12">No projects yet</p>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );
 }
+
 export default Projects;
