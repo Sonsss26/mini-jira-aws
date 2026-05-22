@@ -15,7 +15,7 @@ npm run dev
 ```
 
 - Frontend: http://localhost:5173  
-- Backend: http://localhost:5000  
+- Backend: import.meta.env.VITE_API_BASE_URL 
 
 Copy env templates and fill in your values:
 
@@ -82,7 +82,7 @@ Insert rows into the `Users` table (Console or API):
 **Dev-only seed API** (manager token required):
 
 ```http
-POST http://localhost:5000/api/users/seed
+POST import.meta.env.VITE_API_BASE_URL
 Authorization: Bearer <id_token>
 Content-Type: application/json
 

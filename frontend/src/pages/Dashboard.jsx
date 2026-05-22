@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "react-oidc-context";
 import toast from "react-hot-toast";
 import Navbar from "../components/Navbar";
 import KanbanBoard from "../components/KanbanBoard";
-import { api, authHeaders } from "../lib/api";
+import { api } from "../lib/api";
 
 const EMPTY_FORM = {
   title: "",
@@ -29,76 +29,114 @@ function Dashboard() {
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
 
+  const token = auth.user?.id_token;
+
+  const authConfig = useCallback(() => {
+    if (!token) {
+      throw new Error("Missing Cognito ID token");
+    }
+
+    return {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    };
+  }, [token]);
+
   const profile = auth.user?.profile;
+
   const user = {
     name: profile?.email || "User",
     role: profile?.["custom:role"] || "employee",
     teamId: profile?.["custom:teamId"] || "",
   };
+
   const isManager = user.role === "manager";
 
-  const headers = () => authHeaders(auth.user?.id_token);
+  const fetchComments = useCallback(
+    async (taskId) => {
+      if (!token) return;
 
-  useEffect(() => {
-    if (!auth.isAuthenticated) {
-      navigate("/login");
-      return;
-    }
-    fetchTasks();
-  }, [auth.isAuthenticated]);
+      try {
+        const { data } = await api.get(`/api/comments/${taskId}`, authConfig());
+        setComments((prev) => ({ ...prev, [taskId]: data }));
+      } catch {
+        // non-fatal
+      }
+    },
+    [token, authConfig],
+  );
 
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
+    if (!token) return;
+
     try {
       setLoadingTasks(true);
-      const { data } = await api.get("/api/tasks", headers());
+      const { data } = await api.get("/api/tasks", authConfig());
       setTasks(data);
       data.forEach((task) => fetchComments(task.id));
-    } catch {
+    } catch (error) {
+      console.error("Fetch tasks error:", error?.response?.data || error);
       toast.error("Failed to load tasks");
     } finally {
       setLoadingTasks(false);
     }
-  };
+  }, [token, authConfig, fetchComments]);
+
+  useEffect(() => {
+    if (auth.isLoading) return;
+
+    if (!auth.isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    if (token) {
+      fetchTasks();
+    }
+  }, [auth.isLoading, auth.isAuthenticated, token, navigate, fetchTasks]);
 
   const fetchEmployees = async (teamId) => {
-    if (!teamId) {
+    if (!teamId || !token) {
       setEmployees([]);
       return;
     }
+
     try {
       setLoadingEmployees(true);
-      const { data } = await api.get(`/api/users/team/${teamId}`, headers());
+      const { data } = await api.get(`/api/users/team/${teamId}`, authConfig());
       setEmployees(data);
-    } catch {
+    } catch (error) {
+      console.error("Fetch employees error:", error?.response?.data || error);
       setEmployees([]);
+      toast.error("Failed to load employees");
     } finally {
       setLoadingEmployees(false);
     }
   };
 
-  const fetchComments = async (taskId) => {
-    try {
-      const { data } = await api.get(`/api/comments/${taskId}`, headers());
-      setComments((prev) => ({ ...prev, [taskId]: data }));
-    } catch {
-      /* non-fatal */
-    }
-  };
-
   const handleCreateComment = async (taskId) => {
     const text = commentInputs[taskId]?.trim();
-    if (!text) return;
+    if (!text || !token) return;
+
     try {
-      await api.post(`/api/comments/${taskId}`, { text }, headers());
+      await api.post(`/api/comments/${taskId}`, { text }, authConfig());
       setCommentInputs((prev) => ({ ...prev, [taskId]: "" }));
       fetchComments(taskId);
-    } catch {
+    } catch (error) {
+      console.error("Create comment error:", error?.response?.data || error);
       toast.error("Failed to add comment");
     }
   };
 
   const handleCreateTask = async (e) => {
     e.preventDefault();
+
+    if (!token) {
+      toast.error("Session expired. Please sign in again.");
+      return;
+    }
+
     if (!form.teamId || !form.assigneeId) {
       toast.error("Select a team and assignee");
       return;
@@ -112,37 +150,44 @@ function Dashboard() {
     formData.append("teamId", form.teamId);
     formData.append("assigneeId", form.assigneeId);
     formData.append("assigneeName", form.assigneeName);
-    if (form.image) formData.append("image", form.image);
+
+    if (form.image) {
+      formData.append("image", form.image);
+    }
 
     try {
-      await api.post("/api/tasks", formData, headers());
+      await api.post("/api/tasks", formData, authConfig());
       toast.success("Task created");
       setForm(EMPTY_FORM);
       setEmployees([]);
       fetchTasks();
-    } catch {
-      toast.error("Could not create task");
+    } catch (error) {
+      console.error("Create task error:", error?.response?.data || error);
+      toast.error(error?.response?.data?.message || "Could not create task");
     }
   };
 
   const handleDeleteTask = async (taskId) => {
     if (!window.confirm("Delete this task?")) return;
+
     try {
-      await api.delete(`/api/tasks/${taskId}`, headers());
+      await api.delete(`/api/tasks/${taskId}`, authConfig());
       toast.success("Task deleted");
       fetchTasks();
-    } catch {
+    } catch (error) {
+      console.error("Delete task error:", error?.response?.data || error);
       toast.error("Could not delete task");
     }
   };
 
   const handleUpdateStatus = async (taskId, status) => {
     try {
-      await api.patch(`/api/tasks/${taskId}/status`, { status }, headers());
+      await api.patch(`/api/tasks/${taskId}/status`, { status }, authConfig());
       setTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, status } : t))
+        prev.map((task) => (task.id === taskId ? { ...task, status } : task)),
       );
-    } catch {
+    } catch (error) {
+      console.error("Update status error:", error?.response?.data || error);
       toast.error("Failed to update status");
       fetchTasks();
     }
@@ -172,7 +217,9 @@ function Dashboard() {
             <p className="text-sm text-gray-500 mt-1">
               {user.name}
               <span className="mx-2">·</span>
-              <span className="capitalize text-blue-600 font-medium">{user.role}</span>
+              <span className="capitalize text-blue-600 font-medium">
+                {user.role}
+              </span>
               {!isManager && user.teamId && (
                 <>
                   <span className="mx-2">·</span>
@@ -181,6 +228,7 @@ function Dashboard() {
               )}
             </p>
           </div>
+
           <button
             onClick={handleLogout}
             className="text-sm border border-gray-200 bg-white text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-100"
@@ -191,8 +239,14 @@ function Dashboard() {
 
         {isManager && (
           <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Create task</h2>
-            <form onSubmit={handleCreateTask} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              Create task
+            </h2>
+
+            <form
+              onSubmit={handleCreateTask}
+              className="grid grid-cols-1 md:grid-cols-3 gap-4"
+            >
               <input
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm"
                 placeholder="Title *"
@@ -200,40 +254,58 @@ function Dashboard() {
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
                 required
               />
+
               <input
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm md:col-span-2"
                 placeholder="Description *"
                 value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, description: e.target.value })
+                }
                 required
               />
+
               <select
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm"
                 value={form.priority}
-                onChange={(e) => setForm({ ...form, priority: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, priority: e.target.value })
+                }
               >
                 <option>Low</option>
                 <option>Medium</option>
                 <option>High</option>
               </select>
+
               <input
                 type="date"
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm"
                 value={form.deadline}
-                onChange={(e) => setForm({ ...form, deadline: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, deadline: e.target.value })
+                }
               />
+
               <input
                 type="file"
                 accept="image/*"
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                onChange={(e) => setForm({ ...form, image: e.target.files[0] })}
+                onChange={(e) =>
+                  setForm({ ...form, image: e.target.files?.[0] || null })
+                }
               />
+
               <select
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm"
                 value={form.teamId}
                 onChange={(e) => {
                   const teamId = e.target.value;
-                  setForm({ ...form, teamId, assigneeId: "", assigneeName: "" });
+                  setForm({
+                    ...form,
+                    teamId,
+                    assigneeId: "",
+                    assigneeName: "",
+                  });
                   fetchEmployees(teamId);
                 }}
                 required
@@ -242,12 +314,16 @@ function Dashboard() {
                 <option value="frontend">Frontend</option>
                 <option value="backend">Backend</option>
               </select>
+
               <select
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm disabled:bg-gray-50"
                 value={form.assigneeId}
                 disabled={!form.teamId || loadingEmployees}
                 onChange={(e) => {
-                  const employee = employees.find((emp) => emp.id === e.target.value);
+                  const employee = employees.find(
+                    (emp) => emp.id === e.target.value,
+                  );
+
                   setForm({
                     ...form,
                     assigneeId: e.target.value,
@@ -263,6 +339,7 @@ function Dashboard() {
                   </option>
                 ))}
               </select>
+
               <button
                 type="submit"
                 className="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-blue-700"
